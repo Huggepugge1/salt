@@ -9,7 +9,7 @@ SECTIONS
     .multiboot : { KEEP(*(.multiboot2_header)) }
 
     /* Code sections */
-    .text : { entry.o(.text*); kernel.o(.text*) }
+    .text : { multiboot.o(.text*); kernel.o(.text*) }
 
     /* Read-only data */
     .rodata : { kernel.o(.rodata*) }
