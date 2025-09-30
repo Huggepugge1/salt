@@ -1,0 +1,2 @@
+kernel main() {}
+kernel some() -> void {}
