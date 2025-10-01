@@ -5,8 +5,11 @@ use std::{
     io::{Read, Write},
 };
 
+use crate::instruction::Instruction;
+
 mod compile;
 mod instruction;
+mod ir_generator;
 mod lexer;
 mod parser;
 
@@ -26,7 +29,7 @@ fn main() {
     }
     let mut ir = String::new();
     for statement in &ast {
-        ir.push_str(&statement.gen_ir());
+        ir.push_str(&statement.gen_ir(&mut ir_generator::IrGenerator::new()));
     }
     File::create("kernel.ll")
         .unwrap()

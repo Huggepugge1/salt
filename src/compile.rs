@@ -30,7 +30,7 @@ fn assemble_nasm() {
 
 fn link_elf() {
     Command::new("ld")
-        .args(["-T", "linker.ld", "-o", "iso/boot/kernel.elf", "kernel.o"])
+        .args(["-T", "linker.ld", "-o", "iso/boot/kernel.elf"])
         .spawn()
         .unwrap()
         .wait()

@@ -1,4 +1,5 @@
 use crate::{
+    ir_generator::IrGenerator,
     lexer::{Token, Type},
     parser::{Parser, Statement},
 };
@@ -6,29 +7,8 @@ use crate::{
 #[derive(Debug)]
 pub struct KernelFunction {
     name: String,
-    body: Vec<Statement>,
+    body: Box<Statement>,
     return_type: Type,
-}
-
-impl Parser {
-    pub fn parse_kernel_function(&mut self) -> Statement {
-        self.bump();
-        let name = self.expect_ident();
-        self.expect(&Token::OpenParen);
-        self.expect(&Token::CloseParen);
-        let return_type = self.expect_optional_type();
-        self.expect(&Token::OpenBrace);
-
-        let body = Vec::new();
-
-        self.expect(&Token::CloseBrace);
-
-        Statement::KernelFunction(KernelFunction {
-            name,
-            body,
-            return_type,
-        })
-    }
 }
 
 impl super::Instruction for KernelFunction {
@@ -38,11 +18,8 @@ impl super::Instruction for KernelFunction {
         parser.expect(&Token::OpenParen);
         parser.expect(&Token::CloseParen);
         let return_type = parser.expect_optional_type();
-        parser.expect(&Token::OpenBrace);
 
-        let body = Vec::new();
-
-        parser.expect(&Token::CloseBrace);
+        let body = Box::new(Statement::parse(parser));
 
         Self {
             name,
@@ -52,20 +29,15 @@ impl super::Instruction for KernelFunction {
     }
 
     fn check(&self) {
-        for statement in &self.body {
-            statement.check();
-        }
+        self.body.check();
     }
 
-    fn gen_ir(&self) -> String {
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
+        ir_generator.new_func();
         let mut ir = String::new();
         ir.push_str(&format!("define void @{}() {{\nentry:\n", self.name));
 
-        for statement in &self.body {
-            ir.push_str("  ");
-            ir.push_str(&statement.gen_ir());
-            ir.push('\n');
-        }
+        ir.push_str(&self.body.gen_ir(ir_generator));
 
         if self.return_type == Type::Void {
             ir.push_str("  ret void\n");
@@ -73,6 +45,8 @@ impl super::Instruction for KernelFunction {
         ir.push('}');
         ir.push('\n');
         ir.push('\n');
+
+        ir_generator.finish_func();
 
         ir.clone()
     }

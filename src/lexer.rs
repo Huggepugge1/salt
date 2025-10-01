@@ -2,6 +2,8 @@ use logos::Logos;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
+    Loop,
+
     Kernel,
 }
 
@@ -13,7 +15,11 @@ pub enum Type {
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub enum Token {
-    #[token("kernel", |_| Keyword::Kernel)]
+    #[regex(r"(kernel|loop)", |lex| match lex.slice() {
+        "kernel" => Keyword::Kernel,
+        "loop" => Keyword::Loop,
+        _ => unreachable!(),
+    }, priority = 3)]
     Keyword(Keyword),
 
     #[token("void", |_| Type::Void)]

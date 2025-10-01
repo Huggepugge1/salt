@@ -1,2 +1,4 @@
-kernel main() {}
+kernel main() {
+	loop {}
+}
 kernel some() -> void {}

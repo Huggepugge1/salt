@@ -1,26 +1,52 @@
 use crate::{
-    instruction::{Instruction, kernel_function::KernelFunction},
+    instruction::{Instruction, block::Block, kernel_function::KernelFunction, r#loop::Loop},
+    ir_generator::IrGenerator,
     lexer::{Keyword, Token, Type},
 };
 
 #[derive(Debug)]
 pub enum Statement {
     KernelFunction(KernelFunction),
-    // Let { name: String, typ: String },
+
+    Loop(Loop),
+
+    Block(Block),
 }
 
-impl Statement {
-    pub fn check(&self) {
-        match self {
-            Statement::KernelFunction(kernel_function) => kernel_function.check(),
-            _ => panic!("Expected KernelFunc"),
+impl Instruction for Statement {
+    fn parse(parser: &mut Parser) -> Self {
+        if let Some(token) = parser.peek() {
+            match token {
+                Token::Keyword(Keyword::Kernel) => {
+                    Statement::KernelFunction(KernelFunction::parse(parser))
+                }
+                Token::Keyword(Keyword::Loop) => Statement::Loop(Loop::parse(parser)),
+                Token::Type(_) => panic!(),
+                Token::Ident(_) => panic!(),
+                Token::ReturnType => panic!(),
+                Token::OpenParen => panic!(),
+                Token::CloseParen => panic!(),
+                Token::OpenBrace => Statement::Block(Block::parse(parser)),
+                Token::CloseBrace => panic!(),
+            }
+        } else {
+            panic!("Preliminary EOF");
         }
     }
 
-    pub fn gen_ir(&self) -> String {
+    fn check(&self) {
         match self {
-            Statement::KernelFunction(kernel_function) => kernel_function.gen_ir(),
-            _ => panic!("Expected KernelFunc"),
+            Statement::KernelFunction(kernel_function) => kernel_function.check(),
+            Statement::Loop(r#loop) => r#loop.check(),
+            Statement::Block(block) => block.check(),
+        }
+    }
+
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
+        match self {
+            Statement::KernelFunction(kernel_function) => kernel_function.gen_ir(ir_generator),
+            Statement::Loop(r#loop) => r#loop.gen_ir(ir_generator),
+            Statement::Block(block) => block.gen_ir(ir_generator),
         }
     }
 }
@@ -80,13 +106,8 @@ impl Parser {
 
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements = Vec::new();
-        while let Some(token) = self.peek() {
-            match token {
-                Token::Keyword(Keyword::Kernel) => {
-                    statements.push(Statement::KernelFunction(KernelFunction::parse(self)))
-                }
-                other => panic!("Unexpected token: {:?}", other),
-            }
+        while let Some(_) = self.peek() {
+            statements.push(Statement::parse(self));
         }
 
         statements
