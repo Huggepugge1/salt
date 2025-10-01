@@ -1,52 +1,117 @@
+use anyhow::Result;
+use logos::Span;
+
 use crate::{
-    instruction::{Instruction, block::Block, kernel_function::KernelFunction, r#loop::Loop},
+    error::{ExpectedToken, ParseError, ParseErrorKind},
+    instruction::{
+        Instruction, block::Block, function_declaration::FunctionDeclaration, intrinsic::Intrinsic,
+        r#loop::Loop,
+    },
     ir_generator::IrGenerator,
-    lexer::{Keyword, Token, Type},
+    lexer::{Keyword, Token, TokenKind, Type},
+    type_checker::TypeChecker,
 };
 
 #[derive(Debug)]
-pub enum Statement {
-    KernelFunction(KernelFunction),
+pub struct Statement {
+    kind: StatementKind,
+    span: Span,
+}
+
+#[derive(Debug)]
+pub enum StatementKind {
+    FunctionDeclaration(FunctionDeclaration),
+
+    Intrinsic(Intrinsic),
 
     Loop(Loop),
 
     Block(Block),
+
+    Empty,
+}
+
+impl Statement {
+    fn throw_parse_error(kind: ParseErrorKind, token: Option<Token>) -> Result<StatementKind> {
+        Err(ParseError::new(kind, token).into())
+    }
 }
 
 impl Instruction for Statement {
-    fn parse(parser: &mut Parser) -> Self {
-        if let Some(token) = parser.peek() {
-            match token {
-                Token::Keyword(Keyword::Kernel) => {
-                    Statement::KernelFunction(KernelFunction::parse(parser))
-                }
-                Token::Keyword(Keyword::Loop) => Statement::Loop(Loop::parse(parser)),
-                Token::Type(_) => panic!(),
-                Token::Ident(_) => panic!(),
-                Token::ReturnType => panic!(),
-                Token::OpenParen => panic!(),
-                Token::CloseParen => panic!(),
-                Token::OpenBrace => Statement::Block(Block::parse(parser)),
-                Token::CloseBrace => panic!(),
-            }
+    fn parse(parser: &mut Parser) -> Result<Self> {
+        let token = if let Some(token) = parser.peek() {
+            token
         } else {
-            panic!("Preliminary EOF");
+            return Err(ParseError {
+                kind: ParseErrorKind::UnexpectedEOF,
+                token: None,
+            }
+            .into());
+        };
+        let span = token.span.clone();
+
+        let kind = match token.kind {
+            TokenKind::Keyword(Keyword::Fn) | TokenKind::Keyword(Keyword::Raw) => {
+                StatementKind::FunctionDeclaration(FunctionDeclaration::parse(parser)?)
+            }
+            TokenKind::Keyword(Keyword::Loop) => StatementKind::Loop(Loop::parse(parser)?),
+            TokenKind::Intrinsic(_) => StatementKind::Intrinsic(Intrinsic::parse(parser)?),
+            TokenKind::Ident(_) => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::Type(_) => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::ReturnType => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::OpenParen => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::CloseParen => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::OpenBrace => StatementKind::Block(Block::parse(parser)?),
+            TokenKind::CloseBrace => Self::throw_parse_error(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Statement),
+                Some(token),
+            )?,
+            TokenKind::Semicolon => StatementKind::Empty,
+        };
+
+        match kind {
+            StatementKind::FunctionDeclaration(_) | StatementKind::Loop(_) => (),
+            _ => parser.end_statement(),
         }
+        Ok(Statement { kind, span })
     }
 
-    fn check(&self) {
-        match self {
-            Statement::KernelFunction(kernel_function) => kernel_function.check(),
-            Statement::Loop(r#loop) => r#loop.check(),
-            Statement::Block(block) => block.check(),
+    fn check(&self, type_checker: &mut TypeChecker) {
+        match &self.kind {
+            StatementKind::FunctionDeclaration(function_declaration) => {
+                function_declaration.check(type_checker)
+            }
+            StatementKind::Intrinsic(intrinsic) => intrinsic.check(type_checker),
+            StatementKind::Loop(r#loop) => r#loop.check(type_checker),
+            StatementKind::Block(block) => block.check(type_checker),
+            StatementKind::Empty => (),
         }
     }
 
     fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
-        match self {
-            Statement::KernelFunction(kernel_function) => kernel_function.gen_ir(ir_generator),
-            Statement::Loop(r#loop) => r#loop.gen_ir(ir_generator),
-            Statement::Block(block) => block.gen_ir(ir_generator),
+        match &self.kind {
+            StatementKind::FunctionDeclaration(function_declaration) => {
+                function_declaration.gen_ir(ir_generator)
+            }
+            StatementKind::Intrinsic(intrinsic) => intrinsic.gen_ir(ir_generator),
+            StatementKind::Loop(r#loop) => r#loop.gen_ir(ir_generator),
+            StatementKind::Block(block) => block.gen_ir(ir_generator),
+            StatementKind::Empty => String::new(),
         }
     }
 }
@@ -66,22 +131,46 @@ impl Parser {
     }
 
     pub fn bump(&mut self) -> Option<Token> {
-        let t = self.peek();
+        let token = self.peek();
         self.pos += 1;
-        t
+        token
     }
 
-    pub fn expect(&mut self, expected: &Token) {
+    pub fn expect(&mut self, expected: &TokenKind) -> Result<()> {
         if let Some(token) = self.bump()
-            && token != *expected
+            && token.kind != *expected
         {
-            panic!("Expected {:?}, got {:?}", expected, token);
+            Err(ParseError::new(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Specific(expected.clone())),
+                Some(token),
+            )
+            .into())
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn expect_without_increment(&mut self, expected: &TokenKind) -> Result<()> {
+        if let Some(token) = self.peek()
+            && token.kind != *expected
+        {
+            Err(ParseError::new(
+                ParseErrorKind::UnexpectedToken(ExpectedToken::Specific(expected.clone())),
+                Some(token),
+            )
+            .into())
+        } else {
+            Ok(())
         }
     }
 
     pub fn expect_ident(&mut self) -> String {
         let token = self.bump();
-        if let Some(Token::Ident(name)) = token {
+        if let Some(Token {
+            kind: TokenKind::Ident(name),
+            ..
+        }) = token
+        {
             name.clone()
         } else if let Some(token) = token {
             panic!("Expected Identifier, got {:?}", token);
@@ -92,9 +181,17 @@ impl Parser {
 
     pub fn expect_optional_type(&mut self) -> Type {
         let token = self.peek();
-        if let Some(Token::ReturnType) = token {
+        if let Some(Token {
+            kind: TokenKind::ReturnType,
+            ..
+        }) = token
+        {
             self.bump();
-            if let Some(Token::Type(t)) = self.bump() {
+            if let Some(Token {
+                kind: TokenKind::Type(t),
+                ..
+            }) = self.bump()
+            {
                 t
             } else {
                 panic!("Expected Type, got {:?}", token);
@@ -104,12 +201,26 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Statement> {
+    pub fn end_statement(&mut self) {
+        match self.bump() {
+            Some(Token {
+                kind: TokenKind::Semicolon,
+                ..
+            }) => (),
+            Some(Token {
+                kind: TokenKind::CloseBrace,
+                ..
+            }) => (),
+            _ => panic!("Statement not terminated"),
+        }
+    }
+
+    pub fn parse(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
-        while let Some(_) = self.peek() {
-            statements.push(Statement::parse(self));
+        while self.peek().is_some() {
+            statements.push(Statement::parse(self)?);
         }
 
-        statements
+        Ok(statements)
     }
 }

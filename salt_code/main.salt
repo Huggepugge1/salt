@@ -1,4 +1,12 @@
-kernel main() {
-	loop {}
+raw fn main() {
+	loop {
+		@hlt();
+	}
 }
-kernel some() -> void {}
+
+fn some() -> void {}
+
+fn invalid() -> void {
+	@hlt();
+	#
+}

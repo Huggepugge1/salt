@@ -1,6 +1,9 @@
+use anyhow::Result;
+
 use crate::{
     ir_generator::IrGenerator,
     parser::{Parser, Statement},
+    type_checker::TypeChecker,
 };
 
 #[derive(Debug)]
@@ -9,18 +12,18 @@ pub struct Loop {
 }
 
 impl super::Instruction for Loop {
-    fn parse(parser: &mut Parser) -> Self {
+    fn parse(parser: &mut Parser) -> Result<Self> {
         parser.bump();
-        let body = Box::new(Statement::parse(parser));
-        Self { body }
+        let body = Box::new(Statement::parse(parser)?);
+        Ok(Self { body })
     }
 
-    fn check(&self) {
-        self.body.check();
+    fn check(&self, type_checker: &mut TypeChecker) {
+        self.body.check(type_checker);
     }
 
     fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
-        ir_generator.new_func();
+        ir_generator.new_function();
         let mut ir = String::new();
         let loop_nr = ir_generator.new_loop();
         ir.push_str(&format!("br label %loop{}\n", loop_nr));
@@ -30,8 +33,8 @@ impl super::Instruction for Loop {
         ir.push_str(&format!("br label %loop{}\n", loop_nr));
         ir.push('\n');
 
-        ir_generator.finish_func();
+        ir_generator.finish_function();
 
-        ir.clone()
+        ir
     }
 }

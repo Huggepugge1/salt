@@ -1,7 +1,10 @@
+use anyhow::Result;
+
 use crate::{
     ir_generator::IrGenerator,
-    lexer::Token,
+    lexer::TokenKind,
     parser::{Parser, Statement},
+    type_checker::TypeChecker,
 };
 
 #[derive(Debug)]
@@ -10,23 +13,23 @@ pub struct Block {
 }
 
 impl super::Instruction for Block {
-    fn parse(parser: &mut Parser) -> Self {
+    fn parse(parser: &mut Parser) -> Result<Self> {
         parser.bump();
         let mut body = Vec::new();
         while let Some(token) = parser.peek()
-            && token != Token::CloseBrace
+            && token.kind != TokenKind::CloseBrace
         {
-            body.push(Statement::parse(parser));
+            body.push(Statement::parse(parser)?);
         }
 
-        parser.expect(&Token::CloseBrace);
+        parser.expect_without_increment(&TokenKind::CloseBrace)?;
 
-        Self { body }
+        Ok(Self { body })
     }
 
-    fn check(&self) {
+    fn check(&self, type_checker: &mut TypeChecker) {
         for statement in &self.body {
-            statement.check();
+            statement.check(type_checker);
         }
     }
 
@@ -38,6 +41,6 @@ impl super::Instruction for Block {
             ir.push('\n');
         }
 
-        ir.clone()
+        ir
     }
 }

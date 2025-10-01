@@ -1,5 +1,4 @@
-use logos::Logos;
-
+use anyhow::Result;
 use std::{
     fs::File,
     io::{Read, Write},
@@ -8,28 +7,31 @@ use std::{
 use crate::instruction::Instruction;
 
 mod compile;
+mod error;
 mod instruction;
 mod ir_generator;
 mod lexer;
 mod parser;
+mod type_checker;
 
-fn main() {
+fn main() -> Result<()> {
     let mut source = Vec::new();
     let _read = File::open("./salt_code/main.salt")
         .unwrap()
         .read_to_end(&mut source)
         .unwrap();
 
-    let tokens = lexer::Token::lexer(&String::from_utf8_lossy(&source))
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
-    let ast = parser::Parser::new(tokens).parse();
+    let tokens = lexer::lex(&String::from_utf8_lossy(&source))?;
+
+    let ast = parser::Parser::new(tokens).parse()?;
+    let mut type_checker = type_checker::TypeChecker::new();
     for statement in &ast {
-        statement.check();
+        statement.check(&mut type_checker);
     }
     let mut ir = String::new();
+    let mut ir_generator = ir_generator::IrGenerator::new();
     for statement in &ast {
-        ir.push_str(&statement.gen_ir(&mut ir_generator::IrGenerator::new()));
+        ir.push_str(&statement.gen_ir(&mut ir_generator));
     }
     File::create("kernel.ll")
         .unwrap()
@@ -38,6 +40,8 @@ fn main() {
 
     // build_minimal_llvm_ir_kernel();
     compile::compile();
+
+    Ok(())
 }
 
 #[allow(dead_code)]

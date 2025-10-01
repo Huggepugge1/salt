@@ -9,12 +9,12 @@ impl IrGenerator {
         }
     }
 
-    pub fn new_func(&mut self) {
+    pub fn new_function(&mut self) {
         self.current_loop.push(0);
     }
 
-    pub fn finish_func(&mut self) {
-        self.current_loop.push(0);
+    pub fn finish_function(&mut self) {
+        self.current_loop.pop();
     }
 
     pub fn new_loop(&mut self) -> usize {
