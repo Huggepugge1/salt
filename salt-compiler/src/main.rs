@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use std::{
     fs::File,
     io::{Read, Write},
@@ -24,15 +25,12 @@ fn main() -> Result<()> {
     let tokens = lexer::lex(&String::from_utf8_lossy(&source).replace("\t", "    "))?;
 
     let ast = parser::Parser::new(tokens).parse()?;
-    let mut type_checker = type_checker::TypeChecker::new();
-    for statement in &ast {
-        statement.check(&mut type_checker);
-    }
-    let mut ir = String::new();
+    let mut type_checker = type_checker::TypeChecker::new(&ast);
+    type_checker.build_symbol_table(&ast);
+    ast.check(&mut type_checker)?;
     let mut ir_generator = ir_generator::IrGenerator::new();
-    for statement in &ast {
-        ir.push_str(&statement.gen_ir(&mut ir_generator));
-    }
+    let ir = ast.gen_ir(&mut ir_generator);
+    println!("{ir}");
     File::create("kernel.ll")
         .unwrap()
         .write_all(ir.as_bytes())

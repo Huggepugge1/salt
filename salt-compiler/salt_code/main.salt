@@ -1,8 +1,11 @@
-raw fn main() {
-	aoenuthaonethuao;
-	loop {
+fn main() {
+	raw fn halt_cpu() -> void {
 		@hlt();
+	}
+	loop {
+		halt_cpu();
 	}
 }
 
-fn some() -> void {}
+fn something() -> void {
+}

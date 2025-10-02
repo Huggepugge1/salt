@@ -12,17 +12,52 @@ pub enum Keyword {
     Loop,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Type {
-    Void,
+impl std::fmt::Display for Keyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Keyword::Fn => write!(f, "fn"),
+            Keyword::Raw => write!(f, "raw"),
+            Keyword::Loop => write!(f, "loop"),
+        }
+    }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Type {
+    Void,
+
+    Any,
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Void => write!(f, "type `void`"),
+            Type::Any => write!(f, "T"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Location {
     pub line: usize,
     pub col: usize,
     pub length: usize,
     pub source: [Option<String>; 3],
+}
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{} | {}", self.line, self.source[1].clone().unwrap())?;
+        writeln!(
+            f,
+            "{} | {}{}",
+            " ".repeat(self.line.ilog10() as usize + 1),
+            " ".repeat(self.col - 1),
+            "^".repeat(self.length),
+        )?;
+        Ok(())
+    }
 }
 
 impl Location {
@@ -64,6 +99,12 @@ impl Location {
             source,
         }
     }
+
+    pub fn value(&self) -> String {
+        let start = self.col - 1;
+        let end = self.col - 1 + self.length;
+        self.source[1].as_ref().unwrap()[start..end].to_string()
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -95,10 +136,10 @@ pub enum TokenKind {
     Intrinsic(String),
 
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
-    Ident(String),
+    Identifier(String),
 
     #[token("->")]
-    ReturnType,
+    Arrow,
 
     #[token("(")]
     OpenParen,
@@ -114,6 +155,29 @@ pub enum TokenKind {
 
     #[token(";")]
     Semicolon,
+}
+
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::Keyword(keyword) => write!(f, "keyword `{keyword}`"),
+            TokenKind::Type(t) => write!(f, "{t}"),
+            TokenKind::Intrinsic(intrinsic) => write!(f, "intrinsic `{intrinsic}`"),
+            TokenKind::Identifier(identifier) => {
+                if identifier.is_empty() {
+                    write!(f, "Identifier")
+                } else {
+                    write!(f, "`{identifier}`")
+                }
+            }
+            TokenKind::Arrow => write!(f, "`->`"),
+            TokenKind::OpenParen => write!(f, "`(`"),
+            TokenKind::CloseParen => write!(f, "`)`"),
+            TokenKind::OpenBrace => write!(f, "`{{`"),
+            TokenKind::CloseBrace => write!(f, "`}}`"),
+            TokenKind::Semicolon => write!(f, "`;`"),
+        }
+    }
 }
 
 pub fn lex(source: &str) -> Result<Vec<Token>> {

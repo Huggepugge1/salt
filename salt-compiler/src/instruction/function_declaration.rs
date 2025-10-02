@@ -1,23 +1,22 @@
-use anyhow::Result;
-
 use crate::{
+    error::{ParseError, TypeCheckError},
     ir_generator::IrGenerator,
     lexer::{Keyword, Token, TokenKind, Type},
     parser::{Parser, Statement},
     type_checker::TypeChecker,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-    name: String,
-    body: Box<Statement>,
-    return_type: Type,
+    pub name: String,
+    pub body: Box<Statement>,
+    pub return_type: Type,
 
-    raw: bool,
+    pub raw: bool,
 }
 
 impl super::Instruction for FunctionDeclaration {
-    fn parse(parser: &mut Parser) -> Result<Self> {
+    fn parse(parser: &mut Parser) -> Result<Self, ParseError> {
         let raw = match parser.bump() {
             Some(Token {
                 kind: TokenKind::Keyword(Keyword::Raw),
@@ -31,7 +30,7 @@ impl super::Instruction for FunctionDeclaration {
         let name = parser.expect_ident()?;
         parser.expect(&TokenKind::OpenParen)?;
         parser.expect(&TokenKind::CloseParen)?;
-        let return_type = parser.expect_optional_type();
+        let return_type = parser.expect_optional_type()?;
 
         let body = Box::new(Statement::parse(parser)?);
 
@@ -44,10 +43,11 @@ impl super::Instruction for FunctionDeclaration {
         })
     }
 
-    fn check(&self, type_checker: &mut TypeChecker) {
-        type_checker.new_function(self.raw);
-        self.body.check(type_checker);
+    fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
+        type_checker.new_function(self);
+        self.body.check(type_checker)?;
         type_checker.finish_function();
+        Ok(Type::Void)
     }
 
     fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {

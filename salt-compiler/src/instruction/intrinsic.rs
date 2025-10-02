@@ -1,19 +1,18 @@
-use anyhow::Result;
-
 use crate::{
+    error::{ParseError, TypeCheckError},
     ir_generator::IrGenerator,
-    lexer::{Token, TokenKind},
+    lexer::{Token, TokenKind, Type},
     parser::Parser,
     type_checker::TypeChecker,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Intrinsic {
     Hlt,
 }
 
 impl super::Instruction for Intrinsic {
-    fn parse(parser: &mut Parser) -> Result<Self> {
+    fn parse(parser: &mut Parser) -> Result<Self, ParseError> {
         let symbol = parser.bump();
         let intrinsic = if let Some(Token {
             kind: TokenKind::Intrinsic(symbol),
@@ -32,11 +31,13 @@ impl super::Instruction for Intrinsic {
         Ok(intrinsic)
     }
 
-    fn check(&self, type_checker: &mut TypeChecker) {
+    fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
         match self {
             Intrinsic::Hlt => {
                 if !type_checker.in_raw_function() {
-                    panic!("@hlt() used in a safe function");
+                    Err(TypeCheckError::UnsafeUseNoToken)
+                } else {
+                    Ok(Type::Void)
                 }
             }
         }

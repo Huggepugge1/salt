@@ -1,19 +1,21 @@
 use anyhow::Result;
 
 use crate::{
+    error::{ParseError, TypeCheckError},
     ir_generator::IrGenerator,
-    lexer::TokenKind,
+    lexer::{TokenKind, Type},
     parser::{Parser, Statement},
     type_checker::TypeChecker,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
-    body: Vec<Statement>,
+    pub body: Vec<Statement>,
+    returns: bool,
 }
 
 impl super::Instruction for Block {
-    fn parse(parser: &mut Parser) -> Result<Self> {
+    fn parse(parser: &mut Parser) -> Result<Self, ParseError> {
         parser.bump();
         let mut body = Vec::new();
         while let Some(token) = parser.peek()
@@ -22,14 +24,20 @@ impl super::Instruction for Block {
             body.push(Statement::parse(parser)?);
         }
 
-        parser.expect_without_increment(&TokenKind::CloseBrace)?;
+        let returns = parser.block_returns();
 
-        Ok(Self { body })
+        Ok(Self { body, returns })
     }
 
-    fn check(&self, type_checker: &mut TypeChecker) {
+    fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
+        let mut last_type = Type::Any;
         for statement in &self.body {
-            statement.check(type_checker);
+            last_type = statement.check(type_checker)?;
+        }
+        if self.returns {
+            Ok(last_type)
+        } else {
+            Ok(Type::Void)
         }
     }
 
@@ -41,6 +49,19 @@ impl super::Instruction for Block {
             ir.push('\n');
         }
 
-        ir
+        println!(
+            "{:?}",
+            ir.split("\n")
+                .map(|e| String::from("  ") + e)
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n"
+        );
+
+        ir.split("\n")
+            .map(|e| String::from("  ") + e)
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n"
     }
 }
