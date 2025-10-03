@@ -59,13 +59,6 @@ impl TypeChecker {
         self.in_raw_function.pop();
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&FunctionDeclaration> {
-        if let Some(function) = self.functions.get(name) {
-            return Some(function);
-        }
-        None
-    }
-
     pub fn in_raw_function(&self) -> bool {
         *self.in_raw_function.last().unwrap()
     }

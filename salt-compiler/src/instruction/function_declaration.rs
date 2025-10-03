@@ -45,18 +45,17 @@ impl super::Instruction for FunctionDeclaration {
 
     fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
         type_checker.new_function(self);
-        let t = self.body.check(type_checker)?;
+        let mut t = self.body.check(type_checker)?;
+        t = match self.body.returns {
+            true => t,
+            false => Type::Void,
+        };
         type_checker.finish_function();
         if self.return_type == t {
             Ok(t)
         } else {
             Err(TypeCheckError::MismatchedType {
-                location: self
-                    .body
-                    .last()
-                    .unwrap_or(&Statement::EMPTY)
-                    .location
-                    .clone(),
+                location: self.body.last().location.clone(),
                 expected: self.return_type,
                 actual: t,
             })
@@ -66,7 +65,11 @@ impl super::Instruction for FunctionDeclaration {
     fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         ir_generator.new_function();
         let mut ir = String::new();
-        ir.push_str(&format!("define void @{}() {{\nentry:\n", self.name));
+        ir.push_str(&format!(
+            "define {} @{}() {{\nentry:\n",
+            self.return_type.to_ir(),
+            self.name
+        ));
 
         self.body.gen_ir(ir_generator);
         match self.body.kind {
@@ -76,7 +79,13 @@ impl super::Instruction for FunctionDeclaration {
             }
         }
 
-        if self.return_type == Type::Void {
+        if self.body.last().returns {
+            ir.push_str(&format!(
+                "  ret {} %{}\n",
+                self.return_type.to_ir(),
+                ir_generator.values.last().unwrap() - 1
+            ))
+        } else if self.return_type == Type::Void {
             ir.push_str("  ret void\n");
         }
         ir.push('}');

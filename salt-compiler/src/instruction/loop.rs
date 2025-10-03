@@ -29,7 +29,8 @@ impl super::Instruction for Loop {
         ir.push_str(&format!("loop{}:\n", loop_nr));
         self.body.gen_ir(ir_generator);
         ir.push_str(&ir_generator.pop_stash());
-        ir.push_str(&format!("br label %loop{}", loop_nr));
+        ir.push_str(&format!("br label %loop{}\n", loop_nr));
+        ir.push_str(&format!("loop_exit{}:", loop_nr));
 
         ir_generator.stash = ir;
     }

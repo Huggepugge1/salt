@@ -12,6 +12,7 @@ pub mod function_declaration;
 pub mod intrinsic;
 pub mod r#loop;
 pub mod string_literal;
+pub mod r#use;
 
 pub trait Instruction
 where

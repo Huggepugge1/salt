@@ -3,7 +3,7 @@ use crate::{
     instruction::{
         Instruction, block::Block, function_call::FunctionCall,
         function_declaration::FunctionDeclaration, intrinsic::Intrinsic, r#loop::Loop,
-        string_literal::StringLiteral,
+        string_literal::StringLiteral, r#use::Use,
     },
     ir_generator::IrGenerator,
     lexer::{Keyword, Location, Token, TokenKind, Type},
@@ -14,6 +14,7 @@ use crate::{
 pub struct Statement {
     pub kind: StatementKind,
     pub location: Location,
+    pub returns: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -23,12 +24,13 @@ pub enum StatementKind {
     FunctionDeclaration(FunctionDeclaration),
     FunctionCall(FunctionCall),
 
-    StringLiteral(StringLiteral),
-
     Intrinsic(Intrinsic),
 
-    Loop(Loop),
+    Use(Use),
 
+    StringLiteral(StringLiteral),
+
+    Loop(Loop),
     Block(Block),
 
     Empty,
@@ -44,6 +46,7 @@ impl Instruction for Statement {
         let location = token.location.clone();
 
         let kind = match token.kind {
+            TokenKind::Keyword(Keyword::Use) => StatementKind::Use(Use::parse(parser)?),
             TokenKind::Keyword(Keyword::Fn) | TokenKind::Keyword(Keyword::Raw) => {
                 StatementKind::FunctionDeclaration(FunctionDeclaration::parse(parser)?)
             }
@@ -56,6 +59,10 @@ impl Instruction for Statement {
             TokenKind::Intrinsic(_) => StatementKind::Intrinsic(Intrinsic::parse(parser)?),
             TokenKind::Identifier(_) => StatementKind::FunctionCall(FunctionCall::parse(parser)?),
             TokenKind::Type(_) => Err(ParseError::UnexpectedToken {
+                actual: Box::new(token),
+                expected: ExpectedToken::Statement,
+            })?,
+            TokenKind::PathSeparator => Err(ParseError::UnexpectedToken {
                 actual: Box::new(token),
                 expected: ExpectedToken::Statement,
             })?,
@@ -79,21 +86,43 @@ impl Instruction for Statement {
             TokenKind::Semicolon => StatementKind::Empty,
         };
 
-        match kind {
-            StatementKind::FunctionDeclaration(_) | StatementKind::Loop(_) => (),
-            StatementKind::Block(_) => parser.end_statement(true)?,
+        let returns = match &kind {
+            StatementKind::FunctionDeclaration(function_declaration) => {
+                function_declaration.body.last().returns
+            }
+            StatementKind::Loop(r#loop) => r#loop.body.last().returns,
+            StatementKind::Block(block) => {
+                parser.end_statement(true)?;
+                match block.body.last() {
+                    Some(statement) => statement.last().returns,
+                    None => false,
+                }
+            }
             _ => parser.end_statement(false)?,
-        }
-        Ok(Statement { kind, location })
+        };
+        Ok(Statement {
+            kind,
+            location,
+            returns,
+        })
     }
 
     fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
         let result = match &self.kind {
+            StatementKind::Module { ast, .. } => {
+                for statement in ast {
+                    statement.check(type_checker)?;
+                }
+                Ok(Type::Void)
+            }
+
             StatementKind::FunctionDeclaration(function_declaration) => {
                 function_declaration.check(type_checker)
             }
             StatementKind::FunctionCall(function_call) => function_call.check(type_checker),
             StatementKind::Intrinsic(intrinsic) => intrinsic.check(type_checker),
+
+            StatementKind::Use(r#use) => r#use.check(type_checker),
 
             StatementKind::StringLiteral(string_literal) => string_literal.check(type_checker),
 
@@ -104,13 +133,6 @@ impl Instruction for Statement {
             }
 
             StatementKind::Empty => Ok(Type::Void),
-
-            StatementKind::Module { ast, .. } => {
-                for statement in ast {
-                    statement.check(type_checker)?;
-                }
-                Ok(Type::Void)
-            }
         };
         match result {
             Ok(r) => Ok(r),
@@ -125,32 +147,12 @@ impl Instruction for Statement {
                 }
 
                 e @ TypeCheckError::MismatchedType { .. } => Err(e),
-                TypeCheckError::MismatchedTypeNoToken { expected, actual } => {
-                    Err(TypeCheckError::MismatchedType {
-                        expected,
-                        actual,
-                        location: self.location.clone(),
-                    })
-                }
             },
         }
     }
 
     fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         match &self.kind {
-            StatementKind::FunctionDeclaration(function_declaration) => {
-                function_declaration.gen_ir(ir_generator)
-            }
-            StatementKind::FunctionCall(function_call) => function_call.gen_ir(ir_generator),
-            StatementKind::Intrinsic(intrinsic) => intrinsic.gen_ir(ir_generator),
-
-            StatementKind::StringLiteral(string_literal) => string_literal.gen_ir(ir_generator),
-
-            StatementKind::Loop(r#loop) => r#loop.gen_ir(ir_generator),
-            StatementKind::Block(block) => block.gen_ir(ir_generator),
-
-            StatementKind::Empty => (),
-
             StatementKind::Module { ast, .. } => {
                 for statement in ast {
                     statement.gen_ir(ir_generator);
@@ -158,6 +160,38 @@ impl Instruction for Statement {
                     ir_generator.ir += stash;
                 }
             }
+
+            StatementKind::FunctionDeclaration(function_declaration) => {
+                function_declaration.gen_ir(ir_generator)
+            }
+            StatementKind::FunctionCall(function_call) => {
+                function_call.gen_ir(ir_generator);
+                if !self.returns {
+                    ir_generator.stash = format!(
+                        "%{} = {}",
+                        ir_generator.new_value(),
+                        ir_generator.pop_stash()
+                    );
+                }
+            }
+            StatementKind::Intrinsic(intrinsic) => intrinsic.gen_ir(ir_generator),
+
+            StatementKind::Use(r#use) => r#use.gen_ir(ir_generator),
+
+            StatementKind::StringLiteral(string_literal) => string_literal.gen_ir(ir_generator),
+
+            StatementKind::Loop(r#loop) => r#loop.gen_ir(ir_generator),
+            StatementKind::Block(block) => block.gen_ir(ir_generator),
+
+            StatementKind::Empty => (),
+        }
+
+        if self.returns && std::ptr::eq(self.last(), self) {
+            ir_generator.stash = format!(
+                "%{} = {}",
+                ir_generator.new_value(),
+                ir_generator.pop_stash()
+            );
         }
     }
 }
@@ -171,27 +205,31 @@ impl Statement {
             length: 0,
             source: [None, None, None],
         },
+        returns: false,
     };
 
-    pub fn last(&self) -> Option<&Statement> {
-        println!("{:#?}", self);
+    pub fn last(&self) -> &Statement {
         match &self.kind {
             StatementKind::Module { ast, .. } => match ast.last() {
                 Some(statement) => statement.last(),
-                None => None,
+                None => &Statement::EMPTY,
             },
             StatementKind::FunctionDeclaration(function_declaration) => {
                 function_declaration.body.last()
             }
-            StatementKind::FunctionCall(_) => Some(self),
-            StatementKind::StringLiteral(_) => Some(self),
-            StatementKind::Intrinsic(_) => Some(self),
+            StatementKind::FunctionCall(_) => self,
+            StatementKind::Intrinsic(_) => self,
+
+            StatementKind::Use(_) => self,
+
+            StatementKind::StringLiteral(_) => self,
+
             StatementKind::Loop(r#loop) => r#loop.body.last(),
             StatementKind::Block(block) => match block.body.last() {
                 Some(statement) => statement.last(),
-                None => None,
+                None => &Statement::EMPTY,
             },
-            StatementKind::Empty => Some(self),
+            StatementKind::Empty => self,
         }
     }
 }
@@ -283,14 +321,15 @@ impl Parser {
         }
     }
 
-    pub fn end_statement(&mut self, block: bool) -> Result<(), ParseError> {
+    // Returns if the statement returns (does not end in a semicolon)
+    pub fn end_statement(&mut self, block: bool) -> Result<bool, ParseError> {
         match self.peek() {
             Some(Token {
                 kind: TokenKind::Semicolon,
                 ..
             }) => {
                 self.bump();
-                Ok(())
+                Ok(false)
             }
             Some(Token {
                 kind: TokenKind::CloseBrace,
@@ -299,7 +338,7 @@ impl Parser {
                 if block {
                     self.bump();
                 }
-                Ok(())
+                Ok(true)
             }
             Some(token) => {
                 self.bump();
@@ -330,6 +369,10 @@ impl Parser {
         }
 
         Ok(Statement {
+            returns: match ast.last() {
+                Some(s) => s.last().returns,
+                None => false,
+            },
             kind: StatementKind::Module {
                 name: self.module_name,
                 ast,

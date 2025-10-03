@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let mut type_checker = type_checker::TypeChecker::new(&ast);
     type_checker.build_symbol_table(&ast);
     ast.check(&mut type_checker)?;
-    let mut ir_generator = ir_generator::IrGenerator::new();
+    let mut ir_generator = ir_generator::IrGenerator::new(type_checker.functions);
     ast.gen_ir(&mut ir_generator);
     println!("{}", ir_generator.get_ir());
     File::create("kernel.ll")

@@ -6,6 +6,8 @@ use crate::error::LexingError;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
+    Use,
+
     Fn,
     Raw,
 
@@ -15,6 +17,7 @@ pub enum Keyword {
 impl std::fmt::Display for Keyword {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Keyword::Use => write!(f, "use"),
             Keyword::Fn => write!(f, "fn"),
             Keyword::Raw => write!(f, "raw"),
             Keyword::Loop => write!(f, "loop"),
@@ -37,6 +40,16 @@ impl std::fmt::Display for Type {
             Type::Void => write!(f, "`void`"),
             Type::Str => write!(f, "`str`"),
             Type::Any => write!(f, "`T`"),
+        }
+    }
+}
+
+impl Type {
+    pub fn to_ir(&self) -> &'static str {
+        match self {
+            Type::Void => "void",
+            Type::Str => "i8*",
+            Type::Any => unreachable!(),
         }
     }
 }
@@ -120,7 +133,8 @@ pub struct Token {
 #[logos(error(LexingError, LexingError::from_lexer))]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub enum TokenKind {
-    #[regex(r"(raw|fn|loop)", |lex| match lex.slice() {
+    #[regex(r"(use|raw|fn|loop)", |lex| match lex.slice() {
+        "use" => Keyword::Use,
         "fn" => Keyword::Fn,
         "raw" => Keyword::Raw,
 
@@ -148,6 +162,9 @@ pub enum TokenKind {
 
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Identifier(String),
+
+    #[token("::")]
+    PathSeparator,
 
     #[token("->")]
     Arrow,
@@ -184,6 +201,7 @@ impl std::fmt::Display for TokenKind {
                     write!(f, "`{identifier}`")
                 }
             }
+            TokenKind::PathSeparator => write!(f, "`::`"),
             TokenKind::Arrow => write!(f, "`->`"),
             TokenKind::OpenParen => write!(f, "`(`"),
             TokenKind::CloseParen => write!(f, "`)`"),

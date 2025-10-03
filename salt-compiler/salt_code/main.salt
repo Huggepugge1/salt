@@ -1,8 +1,12 @@
-fn main() -> str {
+use std::io::vga::print;
+
+fn main() -> void {
 	raw fn halt_cpu() -> str {
 		@hlt();
 		""
 	}
+
+	print("Hello World");
 
 	loop {
 		halt_cpu();

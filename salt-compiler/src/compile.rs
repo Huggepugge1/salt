@@ -30,7 +30,13 @@ fn assemble_nasm() {
 
 fn link_elf() {
     Command::new("ld")
-        .args(["-T", "linker.ld", "-o", "iso/boot/kernel.elf"])
+        .args([
+            "-T",
+            "linker.ld",
+            "../salt-stdlib/target/release",
+            "-o",
+            "iso/boot/kernel.elf",
+        ])
         .spawn()
         .unwrap()
         .wait()

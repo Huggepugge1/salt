@@ -20,7 +20,7 @@ impl super::Instruction for FunctionCall {
     }
 
     fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
-        if let Some(function) = type_checker.get_function(&self.name) {
+        if let Some(function) = type_checker.functions.get(&self.name) {
             Ok(function.return_type)
         } else {
             Err(TypeCheckError::UndeclaredFunctionNoToken)
@@ -28,6 +28,7 @@ impl super::Instruction for FunctionCall {
     }
 
     fn gen_ir(&self, ir_generator: &mut IrGenerator) {
-        ir_generator.stash = format!("call void @{}()", self.name)
+        let return_type = ir_generator.env.get(&self.name).unwrap().return_type;
+        ir_generator.stash = format!("call {} @{}()", return_type.to_ir(), self.name)
     }
 }

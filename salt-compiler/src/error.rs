@@ -21,6 +21,7 @@ impl LexingError {
 #[derive(Debug)]
 pub enum ExpectedToken {
     Statement,
+    ImportSymbol,
     Specific { kind: TokenKind },
 }
 
@@ -28,6 +29,7 @@ impl std::fmt::Display for ExpectedToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpectedToken::Statement => write!(f, "statement"),
+            ExpectedToken::ImportSymbol => write!(f, "identifier or `::`"),
             ExpectedToken::Specific { kind } => write!(f, "{kind}"),
         }
     }
@@ -70,10 +72,6 @@ pub enum TypeCheckError {
         actual: Type,
         location: Location,
     },
-    MismatchedTypeNoToken {
-        expected: Type,
-        actual: Type,
-    },
 }
 
 impl std::fmt::Display for TypeCheckError {
@@ -109,7 +107,6 @@ impl std::fmt::Display for TypeCheckError {
                 writeln!(f, "{}", location)?;
                 Ok(())
             }
-            TypeCheckError::MismatchedTypeNoToken { .. } => unreachable!(),
         }
     }
 }
