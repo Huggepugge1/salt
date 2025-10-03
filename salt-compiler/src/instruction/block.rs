@@ -41,27 +41,19 @@ impl super::Instruction for Block {
         }
     }
 
-    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         let mut ir = String::new();
-
         for statement in &self.body {
-            ir.push_str(&statement.gen_ir(ir_generator));
+            statement.gen_ir(ir_generator);
+            ir.push_str(&ir_generator.pop_stash());
             ir.push('\n');
         }
 
-        println!(
-            "{:?}",
-            ir.split("\n")
-                .map(|e| String::from("  ") + e)
-                .collect::<Vec<_>>()
-                .join("\n")
-                + "\n"
-        );
-
-        ir.split("\n")
+        ir_generator.stash = ir
+            .split("\n")
             .map(|e| String::from("  ") + e)
             .collect::<Vec<_>>()
             .join("\n")
-            + "\n"
+            + "\n";
     }
 }

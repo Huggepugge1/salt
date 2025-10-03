@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct Loop {
-    body: Box<Statement>,
+    pub body: Box<Statement>,
 }
 
 impl super::Instruction for Loop {
@@ -22,15 +22,15 @@ impl super::Instruction for Loop {
         self.body.check(type_checker)
     }
 
-    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         let mut ir = String::new();
         let loop_nr = ir_generator.new_loop();
         ir.push_str(&format!("br label %loop{}\n", loop_nr));
         ir.push_str(&format!("loop{}:\n", loop_nr));
-
-        ir.push_str(&self.body.gen_ir(ir_generator));
+        self.body.gen_ir(ir_generator);
+        ir.push_str(&ir_generator.pop_stash());
         ir.push_str(&format!("br label %loop{}", loop_nr));
 
-        ir
+        ir_generator.stash = ir;
     }
 }

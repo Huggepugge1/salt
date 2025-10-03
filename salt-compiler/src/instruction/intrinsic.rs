@@ -43,9 +43,9 @@ impl super::Instruction for Intrinsic {
         }
     }
 
-    fn gen_ir(&self, _ir_generator: &mut IrGenerator) -> String {
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         match self {
-            Intrinsic::Hlt => String::from("call void asm \"hlt\", \"\"()"),
+            Intrinsic::Hlt => ir_generator.stash = String::from("call void asm \"hlt\", \"\"()"),
         }
     }
 }

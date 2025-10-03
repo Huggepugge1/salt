@@ -26,14 +26,17 @@ impl std::fmt::Display for Keyword {
 pub enum Type {
     Void,
 
+    Str,
+
     Any,
 }
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Void => write!(f, "type `void`"),
-            Type::Any => write!(f, "T"),
+            Type::Void => write!(f, "`void`"),
+            Type::Str => write!(f, "`str`"),
+            Type::Any => write!(f, "`T`"),
         }
     }
 }
@@ -126,11 +129,19 @@ pub enum TokenKind {
     }, priority = 3)]
     Keyword(Keyword),
 
-    #[token("void", |lex| match lex.slice() {
+    #[regex(r"(void|str)", |lex| match lex.slice() {
         "void" => Type::Void,
+        "str" => Type::Str,
         _ => unreachable!(),
     })]
     Type(Type),
+
+    #[regex(r#""(?:[^"]|\\")*""#, |lex| {
+        let string = lex.slice().to_string();
+        let len = string.len();
+        string[1..len - 1].to_string()
+    })]
+    StringLiteral(String),
 
     #[regex(r"@[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Intrinsic(String),
@@ -162,6 +173,9 @@ impl std::fmt::Display for TokenKind {
         match self {
             TokenKind::Keyword(keyword) => write!(f, "keyword `{keyword}`"),
             TokenKind::Type(t) => write!(f, "{t}"),
+
+            TokenKind::StringLiteral(string) => write!(f, "{string:?}"),
+
             TokenKind::Intrinsic(intrinsic) => write!(f, "intrinsic `{intrinsic}`"),
             TokenKind::Identifier(identifier) => {
                 if identifier.is_empty() {

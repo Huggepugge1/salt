@@ -1,11 +1,10 @@
-fn main() {
-	raw fn halt_cpu() -> void {
+fn main() -> str {
+	raw fn halt_cpu() -> str {
 		@hlt();
+		""
 	}
+
 	loop {
 		halt_cpu();
 	}
-}
-
-fn something() -> void {
 }

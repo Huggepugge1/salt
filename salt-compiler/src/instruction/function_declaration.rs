@@ -2,7 +2,7 @@ use crate::{
     error::{ParseError, TypeCheckError},
     ir_generator::IrGenerator,
     lexer::{Keyword, Token, TokenKind, Type},
-    parser::{Parser, Statement},
+    parser::{Parser, Statement, StatementKind},
     type_checker::TypeChecker,
 };
 
@@ -45,27 +45,44 @@ impl super::Instruction for FunctionDeclaration {
 
     fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError> {
         type_checker.new_function(self);
-        self.body.check(type_checker)?;
+        let t = self.body.check(type_checker)?;
         type_checker.finish_function();
-        Ok(Type::Void)
+        if self.return_type == t {
+            Ok(t)
+        } else {
+            Err(TypeCheckError::MismatchedType {
+                location: self
+                    .body
+                    .last()
+                    .unwrap_or(&Statement::EMPTY)
+                    .location
+                    .clone(),
+                expected: self.return_type,
+                actual: t,
+            })
+        }
     }
 
-    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String {
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) {
         ir_generator.new_function();
         let mut ir = String::new();
         ir.push_str(&format!("define void @{}() {{\nentry:\n", self.name));
 
-        ir.push_str(&self.body.gen_ir(ir_generator));
+        self.body.gen_ir(ir_generator);
+        match self.body.kind {
+            StatementKind::FunctionDeclaration(_) => (),
+            _ => {
+                ir.push_str(&ir_generator.pop_stash());
+            }
+        }
 
         if self.return_type == Type::Void {
             ir.push_str("  ret void\n");
         }
         ir.push('}');
         ir.push('\n');
-        ir.push('\n');
 
         ir_generator.finish_function();
-
-        ir
+        ir_generator.function_declarations.push(ir);
     }
 }

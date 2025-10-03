@@ -17,23 +17,24 @@ mod type_checker;
 
 fn main() -> Result<()> {
     let mut source = Vec::new();
-    let _read = File::open("./salt_code/main.salt")
+    let module = "./salt_code/main.salt".to_string();
+    let _read = File::open(&module)
         .unwrap()
         .read_to_end(&mut source)
         .unwrap();
 
     let tokens = lexer::lex(&String::from_utf8_lossy(&source).replace("\t", "    "))?;
 
-    let ast = parser::Parser::new(tokens).parse()?;
+    let ast = parser::Parser::new(tokens, module).parse()?;
     let mut type_checker = type_checker::TypeChecker::new(&ast);
     type_checker.build_symbol_table(&ast);
     ast.check(&mut type_checker)?;
     let mut ir_generator = ir_generator::IrGenerator::new();
-    let ir = ast.gen_ir(&mut ir_generator);
-    println!("{ir}");
+    ast.gen_ir(&mut ir_generator);
+    println!("{}", ir_generator.get_ir());
     File::create("kernel.ll")
         .unwrap()
-        .write_all(ir.as_bytes())
+        .write_all(ir_generator.get_ir().as_bytes())
         .unwrap();
 
     // build_minimal_llvm_ir_kernel();

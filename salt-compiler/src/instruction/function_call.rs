@@ -27,7 +27,7 @@ impl super::Instruction for FunctionCall {
         }
     }
 
-    fn gen_ir(&self, _ir_generator: &mut IrGenerator) -> String {
-        format!("call void @{}()", self.name)
+    fn gen_ir(&self, ir_generator: &mut IrGenerator) {
+        ir_generator.stash = format!("call void @{}()", self.name)
     }
 }

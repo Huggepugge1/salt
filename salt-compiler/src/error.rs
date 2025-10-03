@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::lexer::{Location, Token, TokenKind};
+use crate::lexer::{Location, Token, TokenKind, Type};
 
 #[derive(Default, Debug, Clone, PartialEq, Error)]
 pub enum LexingError {
@@ -48,7 +48,7 @@ impl std::fmt::Display for ParseError {
         match self {
             ParseError::UnexpectedEOF => write!(f, "UnexpectedEOF"),
             ParseError::UnexpectedToken { actual, expected } => {
-                writeln!(f, "error: expected `{}` found {}", expected, actual.kind)?;
+                writeln!(f, "error: expected {} found {}", expected, actual.kind)?;
                 writeln!(f)?;
                 writeln!(f, "{}", actual.location)?;
                 Ok(())
@@ -64,6 +64,16 @@ pub enum TypeCheckError {
 
     UndeclaredFunction(Location),
     UndeclaredFunctionNoToken,
+
+    MismatchedType {
+        expected: Type,
+        actual: Type,
+        location: Location,
+    },
+    MismatchedTypeNoToken {
+        expected: Type,
+        actual: Type,
+    },
 }
 
 impl std::fmt::Display for TypeCheckError {
@@ -76,6 +86,7 @@ impl std::fmt::Display for TypeCheckError {
                 Ok(())
             }
             TypeCheckError::UnsafeUseNoToken => unreachable!(),
+
             TypeCheckError::UndeclaredFunction(location) => {
                 writeln!(f, "error: cannot find function `{}`", location.value())?;
                 writeln!(f)?;
@@ -83,6 +94,22 @@ impl std::fmt::Display for TypeCheckError {
                 Ok(())
             }
             TypeCheckError::UndeclaredFunctionNoToken => unreachable!(),
+
+            TypeCheckError::MismatchedType {
+                expected,
+                actual: found,
+                location,
+            } => {
+                writeln!(
+                    f,
+                    "error: mismatched types, expected {}, found {}",
+                    expected, found
+                )?;
+                writeln!(f)?;
+                writeln!(f, "{}", location)?;
+                Ok(())
+            }
+            TypeCheckError::MismatchedTypeNoToken { .. } => unreachable!(),
         }
     }
 }

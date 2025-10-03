@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use crate::{
-    instruction::function_declaration::FunctionDeclaration,
+    instruction::{block::Block, function_declaration::FunctionDeclaration},
     parser::{Statement, StatementKind},
 };
 
 pub struct TypeChecker {
-    pub functions: Vec<HashMap<String, FunctionDeclaration>>,
+    pub functions: HashMap<String, FunctionDeclaration>,
     in_raw_function: Vec<bool>,
 }
 
 impl TypeChecker {
     pub fn new(ast: &Statement) -> Self {
         let mut type_checker = Self {
-            functions: vec![HashMap::new()],
+            functions: HashMap::new(),
             in_raw_function: Vec::new(),
         };
 
@@ -23,31 +23,31 @@ impl TypeChecker {
 
     pub fn build_symbol_table(&mut self, ast: &Statement) {
         match &ast.kind {
-            StatementKind::Module(ast) => {
+            StatementKind::Module { ast, .. } => {
                 for statement in ast {
                     if let StatementKind::FunctionDeclaration(function_declaration) =
                         &statement.kind
                     {
-                        self.functions.last_mut().unwrap().insert(
+                        self.functions.insert(
                             function_declaration.name.clone(),
                             function_declaration.clone(),
                         );
                     }
                 }
             }
-            StatementKind::Block(block) => {
-                for statement in &block.body {
+            StatementKind::Block(Block { body, .. }) => {
+                for statement in body {
                     if let StatementKind::FunctionDeclaration(function_declaration) =
                         &statement.kind
                     {
-                        self.functions.last_mut().unwrap().insert(
+                        self.functions.insert(
                             function_declaration.name.clone(),
                             function_declaration.clone(),
                         );
                     }
                 }
             }
-            _ => (),
+            _ => unreachable!(),
         }
     }
 
@@ -60,10 +60,8 @@ impl TypeChecker {
     }
 
     pub fn get_function(&self, name: &str) -> Option<&FunctionDeclaration> {
-        for scope in self.functions.iter().rev() {
-            if let Some(function) = scope.get(name) {
-                return Some(function);
-            }
+        if let Some(function) = self.functions.get(name) {
+            return Some(function);
         }
         None
     }

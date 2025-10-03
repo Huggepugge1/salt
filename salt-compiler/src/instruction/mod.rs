@@ -11,6 +11,7 @@ pub mod function_call;
 pub mod function_declaration;
 pub mod intrinsic;
 pub mod r#loop;
+pub mod string_literal;
 
 pub trait Instruction
 where
@@ -18,5 +19,5 @@ where
 {
     fn parse(parser: &mut Parser) -> Result<Self, ParseError>;
     fn check(&self, type_checker: &mut TypeChecker) -> Result<Type, TypeCheckError>;
-    fn gen_ir(&self, ir_generator: &mut IrGenerator) -> String;
+    fn gen_ir(&self, ir_generator: &mut IrGenerator);
 }
