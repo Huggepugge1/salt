@@ -1,1 +1,0 @@
-/home/huggepugge/projects/salt/salt-stdlib/target/debug/libsalt_stdlib.rlib: /home/huggepugge/projects/salt/salt-stdlib/src/io/mod.rs /home/huggepugge/projects/salt/salt-stdlib/src/io/vga.rs /home/huggepugge/projects/salt/salt-stdlib/src/lib.rs
